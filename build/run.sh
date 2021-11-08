@@ -24,6 +24,13 @@ else
 
 	box config set verboseErrors=true
 
+	# If $USER_ID is passed $USER is required to be set
+	if [[ $USER_ID ]]  && [[ !$USER ]]; then
+		echo "INFO: USER_ID
+		 ${USER_ID} passed but no USER, set USER to box"
+		export USER=box
+	fi
+
 	# If a custom user is requested set it before we begin
 	if [[ $USER ]] && [[ $USER != $(whoami) ]]; then
 		echo "INFO: Configuration set to non-root user: ${USER}"
@@ -32,20 +39,30 @@ else
 		if [[ -f /etc/alpine-release ]]; then
 			# If the user exists then we skip the directory migrations as the container is in restart
 			if ! id -u $USER > /dev/null 2>&1; then
-				adduser $USER --home $HOME --disabled-password --ingroup $WORKGROUP
+				# If an USER_ID is passed in use that ID
+				if [[ $USER_ID ]]; then
+					adduser $USER --home $HOME --disabled-password --ingroup $WORKGROUP --uid $USER_ID
+				else
+					adduser $USER --home $HOME --disabled-password --ingroup $WORKGROUP
+				fi
 			fi
 
 		else
 			# If the user exists then we skip the directory migrations as the container is in restart
 			if ! id -u $USER > /dev/null 2>&1; then
-				useradd $USER 
+				# If an USER_ID is passed in use that ID
+				if [[ $USER_ID ]]; then
+					useradd -u $USER_ID $USER 
+				else
+					useradd $USER 
+				fi
+				
 				usermod -a -G $WORKGROUP $USER
 				# Ensure our user home directory exists - we need to create it manually for Alpine builds
 				mkdir -p $HOME
 			fi
 			
 		fi
-
 		# Ensure permissions on relevant directories and any files created previously
 		chown -R $USER:$WORKGROUP $HOME
 		chown -R $USER:$WORKGROUP $APP_DIR
@@ -62,7 +79,6 @@ else
 		fi
 
 		cd $APP_DIR
-
 
 		if [[ -f /etc/alpine-release ]]; then
 			su -p -c $BUILD_DIR/run.sh $USER
